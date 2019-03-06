@@ -1,108 +1,97 @@
-# -*- coding: utf-8 -*-
-"""
-Created on Wed Mar  6 08:37:08 2019
-
-@author: Matthew
-"""
-
-#Import the OpenCV library
+import face_recognition
 import cv2
 
-#Initialize a face cascade using the frontal face haar cascade provided
-#with the OpenCV2 library
-faceCascade = cv2.CascadeClassifier('haarcascade_frontalface_default.xml')
+# This is a demo of running face recognition on live video from your webcam. It's a little more complicated than the
+# other example, but it includes some basic performance tweaks to make things run a lot faster:
+#   1. Process each video frame at 1/4 resolution (though still display it at full resolution)
+#   2. Only detect faces in every other frame of video.
 
-#The deisred output width and height
-OUTPUT_SIZE_WIDTH = 775
-OUTPUT_SIZE_HEIGHT = 600
+# PLEASE NOTE: This example requires OpenCV (the `cv2` library) to be installed only to read from your webcam.
+# OpenCV is *not* required to use the face_recognition library. It's only required if you want to run this
+# specific demo. If you have trouble installing it, try any of the other demos that don't require it instead.
 
-#Open the first webcame device
-capture = cv2.VideoCapture(0)
+# Get a reference to webcam #0 (the default one)
+video_capture = cv2.VideoCapture(0)
 
-#Create two opencv named windows
-cv2.namedWindow("base-image", cv2.WINDOW_AUTOSIZE)
-cv2.namedWindow("result-image", cv2.WINDOW_AUTOSIZE)
+# Load a sample picture and learn how to recognize it.
+obama_image = face_recognition.load_image_file("matthew.JPG")
+obama_face_encoding = face_recognition.face_encodings(obama_image)[0]
 
-#Position the windows next to eachother
-cv2.moveWindow("base-image",0,100)
-cv2.moveWindow("result-image",400,100)
+# Load a second sample picture and learn how to recognize it.
+biden_image = face_recognition.load_image_file("Eli.JPG")
+biden_face_encoding = face_recognition.face_encodings(biden_image)[0]
 
-#Start the window thread for the two windows we are using
-cv2.startWindowThread()
+# Create arrays of known face encodings and their names
+known_face_encodings = [
+    obama_face_encoding,
+    biden_face_encoding
+]
+known_face_names = [
+    "Matthew",
+    "Eli"
+]
 
-rectangleColor = (0,165,255)
+# Initialize some variables
+face_locations = []
+face_encodings = []
+face_names = []
+process_this_frame = True
 
+while True:
+    # Grab a single frame of video
+    ret, frame = video_capture.read()
 
-#Retrieve the latest image from the webcam
-rc,fullSizeBaseImage = capture.read()
+    # Resize frame of video to 1/4 size for faster face recognition processing
+    small_frame = cv2.resize(frame, (0, 0), fx=0.25, fy=0.25)
+    #small_frame = cv2.resize(frame, (0, 0), fx=0.5, fy=0.5)
+    # Convert the image from BGR color (which OpenCV uses) to RGB color (which face_recognition uses)
+    rgb_small_frame = small_frame[:, :, ::-1]
 
-#Resize the image to 320x240
-baseImage = cv2.resize( fullSizeBaseImage, ( 320, 240))
+    # Only process every other frame of video to save time
+    if process_this_frame:
+        # Find all the faces and face encodings in the current frame of video
+        face_locations = face_recognition.face_locations(rgb_small_frame)
+        face_encodings = face_recognition.face_encodings(rgb_small_frame, face_locations)
 
+        face_names = []
+        for face_encoding in face_encodings:
+            # See if the face is a match for the known face(s)
+            matches = face_recognition.compare_faces(known_face_encodings, face_encoding)
+            name = "Unknown"
 
-#Check if a key was pressed and if it was Q, then destroy all
-#opencv windows and exit the application
-pressedKey = cv2.waitKey(2)
+            # If a match was found in known_face_encodings, just use the first one.
+            if True in matches:
+                first_match_index = matches.index(True)
+                name = known_face_names[first_match_index]
 
-if pressedKey == ord('Q'):    
-    cv2.destroyAllWindows()
-    exit(0)
-    
+            face_names.append(name)
 
-
-#Result image is the image we will show the user, which is a
-#combination of the original image from the webcam and the
-#overlayed rectangle for the largest face
-resultImage = baseImage.copy()
-
-
-#For the face detection, we need to make use of a gray colored
-#image so we will convert the baseImage to a gray-based image
-gray = cv2.cvtColor(baseImage, cv2.COLOR_BGR2GRAY)
-#Now use the haar cascade detector to find all faces in the
-#image
-faces = faceCascade.detectMultiScale(gray, 1.3, 5)
-
-
-#For now, we are only interested in the 'largest' face, and we
-#determine this based on the largest area of the found
-#rectangle. First initialize the required variables to 0
-maxArea = 0
-x = 0
-y = 0
-w = 0
-h = 0
-
-
-#Loop over all faces and check if the area for this face is
-#the largest so far
-for (_x,_y,_w,_h) in faces:
-    if  _w*_h > maxArea:
-        x = _x
-        y = _y
-        w = _w
-        h = _h
-        maxArea = w*h
-
-    #If one or more faces are found, draw a rectangle around the
-    #largest face present in the picture
-    if maxArea > 0 :
-        cv2.rectangle(resultImage,  (x-10, y-20),
-	    		    (x + w+10 , y + h+20),
-		    	    rectangleColor,2)
+    process_this_frame = not process_this_frame
 
 
+    # Display the results
+    for (top, right, bottom, left), name in zip(face_locations, face_names):
+        # Scale back up face locations since the frame we detected in was scaled to 1/4 size
+        top *= 4
+        right *= 4
+        bottom *= 4
+        left *= 4
 
-#Since we want to show something larger on the screen than the
-#original 320x240, we resize the image again
-#
-#Note that it would also be possible to keep the large version
-#of the baseimage and make the result image a copy of this large
-#base image and use the scaling factor to draw the rectangle
-#at the right coordinates.
-largeResult = cv2.resize(resultImage,
-		     (OUTPUT_SIZE_WIDTH,OUTPUT_SIZE_HEIGHT))
+        # Draw a box around the face
+        cv2.rectangle(frame, (left, top), (right, bottom), (0, 0, 255), 2)
 
-#Finally, we want to show the images on the screen
-cv2.imshow("base-image", baseImage)
-cv2.imshow("result-image", largeResult)
+        # Draw a label with a name below the face
+        cv2.rectangle(frame, (left, bottom - 35), (right, bottom), (0, 0, 255), cv2.FILLED)
+        font = cv2.FONT_HERSHEY_DUPLEX
+        cv2.putText(frame, name, (left + 6, bottom - 6), font, 1.0, (255, 255, 255), 1)
+
+    # Display the resulting image
+    cv2.imshow('Video', frame)
+
+    # Hit 'q' on the keyboard to quit!
+    if cv2.waitKey(1) & 0xFF == ord('q'):
+        break
+
+# Release handle to the webcam
+video_capture.release()
+cv2.destroyAllWindows()
